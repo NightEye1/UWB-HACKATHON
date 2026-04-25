@@ -5,6 +5,7 @@ import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { agents } from "@/data/scenario";
 import { agentIcons } from "@/components/agent-icons";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/start")({
   head: () => ({
@@ -114,6 +115,51 @@ function StartFlow() {
   const done = step >= total;
   const current = !done ? questions[step] : null;
 
+  const navigate = useNavigate({ from: '/start' });
+  const [isEvaluating, setIsEvaluating] = useState(false);
+
+  const submitToAgents = async (finalData: typeof initialKnown) => {
+    setIsEvaluating(true);
+    setStep(total); // Force UI to the loading screen
+
+    // Map the UI state to our strict Backend API Contract
+    const payload = {
+      application_id: `app-${Math.floor(Math.random() * 10000)}`,
+      project_type: "food_truck",
+      business_info: { 
+        business_name: finalData.business, 
+        employees: finalData.employees.includes("me") ? 1 : 4 
+      },
+      location_details: { 
+        operating_zone: finalData.zone, 
+        proximity_to_park_feet: 45 // Hardcoded trap for the demo!
+      },
+      health_and_safety: { 
+        food_handling_tier: "open_preparation", 
+        commissary_kitchen_access: true 
+      }
+    };
+
+    try {
+      const res = await fetch("http://localhost:8080/api/evaluate-permit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      
+      const data = await res.json();
+      
+      // Store the AI results so the Review page can grab them
+      localStorage.setItem("permitResult", JSON.stringify(data));
+      
+      // Auto-navigate to the review page once the agents are done
+      navigate({ to: "/review" });
+    } catch (error) {
+      console.error("Agent evaluation failed:", error);
+      setIsEvaluating(false);
+    }
+  };
+
   const wokenAgents = useMemo(() => {
     const set = new Set<string>();
     for (let i = 0; i < step; i++) {
@@ -125,9 +171,15 @@ function StartFlow() {
 
   const advance = (value: string) => {
     if (!current) return;
-    setKnown((k) => ({ ...k, [current.fillKey]: value }));
+    const nextKnown = { ...known, [current.fillKey]: value };
+    setKnown(nextKnown);
     setDraft("");
-    setStep((s) => s + 1);
+    
+    if (step + 1 >= total) {
+      submitToAgents(nextKnown);
+    } else {
+      setStep((s) => s + 1);
+    }
   };
 
   const back = () => {
@@ -138,7 +190,7 @@ function StartFlow() {
 
   const useDemo = () => {
     setKnown(seedAnswers);
-    setStep(total);
+    submitToAgents(seedAnswers);
   };
 
   return (
