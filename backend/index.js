@@ -1,97 +1,41 @@
-require('dotenv').config({ path: '../.env.local' }); // Adjust path if your .env is in the root
+require('dotenv').config({ path: '../.env.local' });
 const express = require('express');
 const cors = require('cors');
-const Anthropic = require('@anthropic-ai/sdk');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// --- Middleware ---
-// CORS allows the Lovable React frontend to communicate with this backend
 app.use(cors());
-// Parses incoming JSON payloads from the frontend
 app.use(express.json());
 
-// --- Initialize AI Client ---
-const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// --- Initialize Gemini Client ---
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// --- Health Check Route ---
-app.get('/', (req, res) => {
-    res.status(200).send('PermitPilot Orchestrator is online.');
-});
-
-// --- Agent Engine ---
+// --- Agent Engine (Powered by Gemini) ---
 async function callDomainAgent(agentName, systemRules, userData) {
-    console.log(`[🤖] Waking up ${agentName} Agent...`);
+    console.log(`[🤖] Waking up ${agentName} Agent (Gemini)...`);
     try {
-        const response = await anthropic.messages.create({
-            model: "claude-3-5-sonnet-20241022",
-            max_tokens: 1024,
-            temperature: 0.1, // Low temp for strict rule-following
-            system: `You are the ${agentName}. You are a strict API endpoint. 
-            Evaluate the user's application against these municipal codes: 
-            ${systemRules}
-            
-            You MUST return ONLY a valid JSON object. No markdown formatting, no conversational text.
-            Required JSON schema:
-            {
-                "agency": "${agentName}",
-                "status": "approved" | "conflict",
-                "notes": "Brief explanation",
-                "citations": ["SMC ..."],
-                "required_forms": [{"form_name": "...", "url": "..."}]
-            }`,
-            messages: [
-                { role: "user", content: JSON.stringify(userData) }
-            ]
+        // We use Gemini 1.5 Flash because it is insanely fast for hackathons
+        const model = genAI.getGenerativeModel({
+            model: "gemini-1.5-flash",
+            systemInstruction: `You are the ${agentName}. Evaluate the user's application against these municipal codes: ${systemRules}. You MUST return ONLY a valid JSON object. Required schema: { "agency": "${agentName}", "status": "approved" | "conflict", "notes": "Brief explanation", "citations": ["SMC ..."], "required_forms": [{"form_name": "...", "url": "..."}] }`,
+            generationConfig: {
+                temperature: 0.1,
+                responseMimeType: "application/json" // This forces perfect JSON output
+            }
         });
 
-        // Parse Claude's text response into an actual JSON object
-        return JSON.parse(response.content[0].text);
+        const prompt = JSON.stringify(userData);
+        const result = await model.generateContent(prompt);
+        const responseText = result.response.text();
+        
+        return JSON.parse(responseText);
     } catch (error) {
         console.error(`[❌] ${agentName} Agent failed:`, error);
         return { agency: agentName, status: "error", notes: "Agent offline." };
     }
 }
-//*/
-
-/*/ --- TEMPORARY MOCKED AGENT ENGINE ---
-async function callDomainAgent(agentName, systemRules, userData) {
-    console.log(`[🤖] Waking up ${agentName} Agent (MOCKED)...`);
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    if (agentName === "Zoning Authority") {
-        return {
-            "agency": "Zoning Authority",
-            "status": "conflict",
-            "notes": "Food truck is placed 45 feet from a park boundary, which violates the 50-foot minimum.",
-            "citations": ["SMC 15.17.005"],
-            "required_forms": []
-        };
-    }
-
-    if (agentName === "Health Department") {
-        return {
-            "agency": "Health Department",
-            "status": "approved",
-            "notes": "Open food prep requires a commissary kitchen. User indicated access is true.",
-            "citations": ["KCBOH Title 5"],
-            "required_forms": [
-                {
-                    "form_name": "Mobile Food Unit Plan Review",
-                    "url": "https://kingcounty.gov/plan-review.pdf"
-                }
-            ]
-        };
-    }
-
-    return { agency: agentName, status: "error", notes: "Unknown agent." };
-}
-//*/
 
 // --- The Core Orchestrator Endpoint ---
 app.post('/api/evaluate-permit', async (req, res) => {
