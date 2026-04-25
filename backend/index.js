@@ -22,7 +22,7 @@ app.get('/', (req, res) => {
     res.status(200).send('PermitPilot Orchestrator is online.');
 });
 
-// --- Agent Engine ---
+/*/ --- Agent Engine ---
 async function callDomainAgent(agentName, systemRules, userData) {
     console.log(`[🤖] Waking up ${agentName} Agent...`);
     try {
@@ -55,6 +55,42 @@ async function callDomainAgent(agentName, systemRules, userData) {
         return { agency: agentName, status: "error", notes: "Agent offline." };
     }
 }
+//*/
+
+// --- TEMPORARY MOCKED AGENT ENGINE ---
+async function callDomainAgent(agentName, systemRules, userData) {
+    console.log(`[🤖] Waking up ${agentName} Agent (MOCKED)...`);
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    if (agentName === "Zoning Authority") {
+        return {
+            "agency": "Zoning Authority",
+            "status": "conflict",
+            "notes": "Food truck is placed 45 feet from a park boundary, which violates the 50-foot minimum.",
+            "citations": ["SMC 15.17.005"],
+            "required_forms": []
+        };
+    }
+
+    if (agentName === "Health Department") {
+        return {
+            "agency": "Health Department",
+            "status": "approved",
+            "notes": "Open food prep requires a commissary kitchen. User indicated access is true.",
+            "citations": ["KCBOH Title 5"],
+            "required_forms": [
+                {
+                    "form_name": "Mobile Food Unit Plan Review",
+                    "url": "https://kingcounty.gov/plan-review.pdf"
+                }
+            ]
+        };
+    }
+
+    return { agency: agentName, status: "error", notes: "Unknown agent." };
+}
 
 // --- The Core Orchestrator Endpoint ---
 app.post('/api/evaluate-permit', async (req, res) => {
@@ -66,8 +102,7 @@ app.post('/api/evaluate-permit', async (req, res) => {
             return res.status(400).json({ error: "Empty payload received" });
         }
 
-        // 1. Load Vivek's mock data (For right now, we will use hardcoded strings to test)
-        // Once Vivek finishes the files, you can use fs.readFileSync('../data/zoning_code.json')
+        // 1. Load mock data 
         const zoningRules = "SMC 15.17.005: Food trucks cannot operate within 50 feet of a park.";
         const healthRules = "KCBOH Title 5: Open food prep requires a Level 3 permit and commissary kitchen.";
 
@@ -79,8 +114,7 @@ app.post('/api/evaluate-permit', async (req, res) => {
             callDomainAgent("Health Department", healthRules, intakeData)
         ]);
 
-        // 3. The Orchestrator Synthesis (Merging the results)
-        // In a full build, Claude does this part too. For speed, we will do it in code.
+        // 3. The Orchestrator Synthesis
         const allResults = [zoningResult, healthResult];
         const hasConflict = allResults.some(res => res.status === 'conflict');
 
@@ -91,28 +125,24 @@ app.post('/api/evaluate-permit', async (req, res) => {
             }
         });
 
-        // 4. Send the final compiled package back to Shivek's frontend
-        res.status(200).json({
+        // 4. Send the FINAL response (Make sure there are no other res.json calls after this!)
+        return res.status(200).json({
             status: "success",
             conflict_detected: hasConflict,
             agent_details: allResults,
             unified_checklist: finalChecklist
         });
 
-        // Temporary mock response to verify frontend-to-backend wiring
-        res.status(200).json({
-            status: "success",
-            message: "API Gateway hit successfully. Ready for Claude agents.",
-            received_project_type: intakeData.project_type
-        });
-
     } catch (error) {
         console.error("[❌] Orchestrator Error:", error);
-        res.status(500).json({ 
-            status: "error",
-            message: "The Orchestrator encountered a fatal error.",
-            details: error.message
-        });
+        // Only trigger this if something catastrophically breaks before the 200 response
+        if (!res.headersSent) {
+            return res.status(500).json({ 
+                status: "error",
+                message: "The Orchestrator encountered a fatal error.",
+                details: error.message
+            });
+        }
     }
 });
 
