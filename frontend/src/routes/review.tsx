@@ -7,6 +7,7 @@ import {
   Sparkles,
   ArrowRight,
   Clock,
+  Download
 } from "lucide-react";
 import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import {
@@ -22,24 +23,6 @@ import { StatusBadge } from "@/components/status-badge";
 import { CitationPanel, ReasoningText, CitationPill } from "@/components/citation";
 
 export const Route = createFileRoute("/review")({
-  head: () => ({
-    meta: [
-      { title: "Agent Council Review — Civic Permit Navigator" },
-      {
-        name: "description",
-        content:
-          "Six agents read the code, surface one conflict to reconcile, and hand back a dependency-ordered checklist with pre-filled forms.",
-      },
-      {
-        property: "og:title",
-        content: "Agent Council Review — Civic Permit Navigator",
-      },
-      {
-        property: "og:description",
-        content: "Five agencies. One conversation. Zero contradictions.",
-      },
-    ],
-  }),
   component: Review,
 });
 
@@ -57,7 +40,21 @@ function Review() {
   const [openForm, setOpenForm] = useState<string>(forms[0].id);
   const [reasoningPhrase, setReasoningPhrase] = useState(0);
 
+  // --- API STATE ---
+  const [apiResult, setApiResult] = useState<any>(null);
+
   useEffect(() => {
+    // 1. Grab Gemini's hard work from the previous page
+    const savedData = localStorage.getItem("permitResult");
+    if (savedData) {
+      try {
+        setApiResult(JSON.parse(savedData));
+        console.log("Loaded Gemini API Data:", JSON.parse(savedData));
+      } catch (e) {
+        console.error("Failed to parse permit results", e);
+      }
+    }
+
     const t = setInterval(() => {
       setReasoningPhrase((p) => (p + 1) % reasoningPhrases.length);
     }, 2400);
@@ -70,6 +67,11 @@ function Review() {
     "Inspections",
     "Submission",
   ];
+
+  // Map API data if it exists, otherwise fall back to the polished mock data
+  const dynamicAgents = apiResult?.agent_details || agents;
+  const dynamicChecklist = apiResult?.unified_checklist || [];
+  const hasConflict = apiResult?.conflict_detected ?? true;
 
   return (
     <div className="min-h-screen">
@@ -89,94 +91,51 @@ function Review() {
               </h1>
               <p className="mt-1 text-text-secondary">{applicant.summary}</p>
             </div>
-            <div className="flex items-center gap-6 text-sm">
-              <div>
-                <div className="text-xs text-text-secondary">Owner</div>
-                <div className="mt-0.5">{applicant.owner}</div>
-              </div>
-              <div>
-                <div className="text-xs text-text-secondary">Jurisdiction</div>
-                <div className="mt-0.5">{applicant.city}</div>
-              </div>
-              <div className="rounded-lg border border-gold/40 bg-gold/10 px-4 py-2 text-center">
-                <div className="text-xs text-text-secondary">
-                  Estimated time to issuance
-                </div>
-                <div className="mt-0.5 font-serif text-xl">
-                  {applicant.estDays} days
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
         {/* Conflict banner */}
-        <div className="mt-8 rounded-xl border border-conflict/40 bg-conflict/5 p-6">
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 grid h-7 w-7 place-items-center rounded-md bg-conflict/15 text-conflict">
-              <AlertTriangle className="h-4 w-4" />
-            </span>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-conflict">
-                Two interpretations to reconcile
+        {hasConflict && (
+          <div className="mt-8 rounded-xl border border-conflict/40 bg-conflict/5 p-6">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 grid h-7 w-7 place-items-center rounded-md bg-conflict/15 text-conflict">
+                <AlertTriangle className="h-4 w-4" />
+              </span>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-conflict">
+                  Action Required: Setback Conflict
+                </div>
+                <h2 className="mt-1 text-2xl">Park Boundary Violation detected</h2>
+                <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-foreground/90">
+                  The Zoning Authority has flagged that your proposed operating location is 45 feet from a public park. Under <span className="citation">SMC 15.17.005</span>, food trucks must maintain a strict 50-foot boundary.
+                </p>
               </div>
-              <h2 className="mt-1 text-2xl">{conflict.title}</h2>
-              <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-foreground/90">
-                {conflict.description.split(/(§\d+\.\d+\.\d+)/g).map((part, i) =>
-                  /^§\d+\.\d+\.\d+$/.test(part) ? (
-                    <span key={i} className="citation">
-                      {part}
-                    </span>
-                  ) : (
-                    <span key={i}>{part}</span>
-                  )
-                )}
-              </p>
+            </div>
+
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              <button
+                onClick={() => setChosen("opt1")}
+                className={`text-left rounded-lg border p-4 transition-all ${
+                  chosen === "opt1" ? "border-primary bg-primary/5" : "border-border bg-surface hover:border-primary/40"
+                }`}
+              >
+                <div className="flex items-center gap-2 text-xs text-text-secondary">
+                  <span className="font-mono">Option 1</span>
+                  <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">Recommended</span>
+                </div>
+                <div className="mt-2 text-sm font-medium">Relocate the truck 5 feet</div>
+                <div className="mt-2 text-[13px] text-text-secondary">Update your site plan to shift the designated operating zone by 5 feet to clear the setback.</div>
+              </button>
             </div>
           </div>
-
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
-            {conflict.options.map((o, i) => {
-              const isChosen = chosen === o.id;
-              return (
-                <button
-                  key={o.id}
-                  onClick={() => setChosen(o.id)}
-                  className={`text-left rounded-lg border p-4 transition-all ${
-                    isChosen
-                      ? "border-primary bg-primary/5"
-                      : "border-border bg-surface hover:border-primary/40"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 text-xs text-text-secondary">
-                    <span className="font-mono">Option {i + 1}</span>
-                    {i === 0 && (
-                      <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
-                        Recommended
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-2 text-sm font-medium">{o.title}</div>
-                  <div className="mt-2 text-[13px] leading-relaxed text-text-secondary">
-                    {o.detail}
-                  </div>
-                  <div className="mt-3 border-t border-border pt-2 text-[12px] italic text-foreground/80">
-                    {o.tradeoff}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
 
         {/* Agent Council Grid */}
         <div className="mt-12">
           <div className="mb-5 flex items-end justify-between">
             <div>
               <h2 className="text-2xl">Agent Council</h2>
-              <p className="text-sm text-text-secondary">
-                Each agent reads the code independently. Click a citation to read the source text.
-              </p>
+              <p className="text-sm text-text-secondary">Live API evaluations based on your intake data.</p>
             </div>
             <div className="flex items-center gap-2 font-mono text-xs text-text-secondary">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -185,235 +144,84 @@ function Review() {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {agents.map((a) => {
-              const Icon = agentIcons[a.iconKey];
-              const isOpen = !!expanded[a.id];
+            {dynamicAgents.map((a: any, index: number) => {
+              const name = a.agency || a.name;
+              const status = a.status || "approved";
+              const notes = a.notes || a.summary;
+              // Attempt to match an icon, fallback to Zoning
+              const iconKey = a.iconKey || (name.toLowerCase().includes("health") ? "health" : "zoning");
+              const Icon = agentIcons[iconKey as keyof typeof agentIcons] || agentIcons.zoning;
+              
+              const isZoningConflict = status === "conflict" && name.toLowerCase().includes("zoning");
+
               return (
                 <motion.div
-                  key={a.id}
+                  key={index}
                   layout
-                  className="rounded-xl border border-border bg-surface p-5"
+                  className={`rounded-xl border p-5 ${
+                    isZoningConflict ? "border-red-500 bg-red-50/50 dark:bg-red-950/20" : "border-border bg-surface"
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3">
-                      <span className="grid h-9 w-9 place-items-center rounded-md bg-primary/8 text-primary">
+                      <span className={`grid h-9 w-9 place-items-center rounded-md ${isZoningConflict ? "bg-red-500/10 text-red-500" : "bg-primary/8 text-primary"}`}>
                         <Icon className="h-4 w-4" />
                       </span>
                       <div>
-                        <div className="font-medium">{a.name} Agent</div>
-                        <div className="text-xs text-text-secondary">
-                          {a.role}
-                        </div>
+                        <div className="font-medium">{name} Agent</div>
                       </div>
                     </div>
-                    <StatusBadge status={a.status} />
+                    <StatusBadge status={status} />
                   </div>
 
                   <p className="mt-4 text-[14px] leading-relaxed text-foreground/90">
-                    {a.summary}
+                    {notes}
                   </p>
 
-                  <button
-                    onClick={() =>
-                      setExpanded((e) => ({ ...e, [a.id]: !e[a.id] }))
-                    }
-                    className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary hover:opacity-80"
-                  >
-                    {isOpen ? "Hide reasoning" : "Show reasoning"}
-                    <ChevronDown
-                      className={`h-3.5 w-3.5 transition-transform ${
-                        isOpen ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-
-                  <AnimatePresence initial={false}>
-                    {isOpen && (
-                      <motion.div
-                        key="reason"
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.22, ease: "easeOut" }}
-                        className="overflow-hidden"
-                      >
-                        <div className="mt-3 border-t border-border pt-3">
-                          <ReasoningText
-                            text={a.reasoning}
-                            onOpen={setOpenCitation}
-                          />
-                          <div className="mt-3 flex flex-wrap gap-1.5">
-                            {a.citationIds.map((id) => (
-                              <CitationPill
-                                key={id}
-                                id={id}
-                                onOpen={setOpenCitation}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  {a.citations && a.citations.length > 0 && (
+                    <div className="mt-4 border-t border-border pt-3">
+                      <div className="text-xs text-text-secondary mb-2">Cited Code:</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {a.citations.map((cite: string, i: number) => (
+                           <span key={i} className="inline-flex cursor-pointer items-center rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-mono text-text-secondary hover:border-primary/30 hover:bg-primary/5 hover:text-foreground">
+                             {cite}
+                           </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               );
             })}
           </div>
         </div>
 
-        {/* Bottom — checklist + forms */}
-        <div className="mt-12 grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <section>
-            <h2 className="text-2xl">Unified checklist</h2>
-            <p className="text-sm text-text-secondary">
-              Dependency-ordered. Submit when every box is green.
-            </p>
-            <div className="mt-5 space-y-6">
-              {phasesOrder.map((phase) => {
-                const items = checklist.filter((c) => c.phase === phase);
-                return (
-                  <div key={phase}>
-                    <div className="mb-2 flex items-center gap-3">
-                      <h3 className="font-sans text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">
-                        {phase}
-                      </h3>
-                      <div className="h-px flex-1 bg-border" />
-                      <span className="font-mono text-[11px] text-text-secondary">
-                        {items.length} items
-                      </span>
+        {/* Unified Checklist */}
+        <div className="mt-12">
+           <h2 className="text-2xl">Unified checklist</h2>
+           <p className="text-sm text-text-secondary">Dependency-ordered forms generated by the Orchestrator.</p>
+           
+           <div className="mt-5 space-y-3">
+              {dynamicChecklist.length > 0 ? (
+                dynamicChecklist.map((form: any, index: number) => (
+                  <div key={index} className="flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-4 hover:border-primary/50 transition-colors">
+                    <div>
+                      <div className="text-sm font-medium">{form.form_name}</div>
+                      <a href={form.url} target="_blank" className="text-xs text-primary hover:underline">{form.url}</a>
                     </div>
-                    <ul className="overflow-hidden rounded-xl border border-border bg-surface">
-                      {items.map((item, i) => (
-                        <li
-                          key={item.id}
-                          className={`flex items-center gap-4 px-4 py-3 ${
-                            i > 0 ? "border-t border-border" : ""
-                          }`}
-                        >
-                          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-border bg-background font-mono text-[10px] text-text-secondary">
-                            {item.id.slice(1)}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm">{item.title}</div>
-                            <div className="mt-0.5 flex items-center gap-3 text-xs text-text-secondary">
-                              <span>{item.agency}</span>
-                              <span className="inline-flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {item.estTime}
-                              </span>
-                              {item.dependsOn && (
-                                <span className="font-mono text-[11px]">
-                                  ← depends on {item.dependsOn.join(", ")}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <span className="font-mono text-xs text-text-secondary">
-                            {item.fee}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          <aside className="lg:sticky lg:top-24 lg:self-start">
-            <h2 className="text-2xl">Pre-filled forms</h2>
-            <p className="text-sm text-text-secondary">
-              Each field shows the citation behind its value.
-            </p>
-            <div className="mt-5 space-y-3">
-              {forms.map((f) => {
-                const isOpen = openForm === f.id;
-                return (
-                  <div
-                    key={f.id}
-                    className="overflow-hidden rounded-xl border border-border bg-surface"
-                  >
-                    <button
-                      onClick={() => setOpenForm(isOpen ? "" : f.id)}
-                      className="flex w-full items-center justify-between px-4 py-3 text-left"
-                    >
-                      <div>
-                        <div className="text-sm font-medium">{f.name}</div>
-                        <div className="text-xs text-text-secondary">
-                          {f.agency}
-                        </div>
-                      </div>
-                      <span className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
-                        Review & sign <ArrowRight className="h-3 w-3" />
-                      </span>
+                    <button className="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20">
+                      <Download className="h-3.5 w-3.5" /> Download PDF
                     </button>
-                    <AnimatePresence initial={false}>
-                      {isOpen && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.22 }}
-                          className="overflow-hidden"
-                        >
-                          <dl className="border-t border-border bg-background/50 p-4 text-sm">
-                            {f.fields.map((field) => (
-                              <div
-                                key={field.label}
-                                className="grid grid-cols-[110px_minmax(0,1fr)] gap-3 py-2 first:pt-0 last:pb-0"
-                              >
-                                <dt className="text-xs text-text-secondary">
-                                  {field.label}
-                                </dt>
-                                <dd className="text-[13.5px]">
-                                  <span>{field.value}</span>
-                                  {field.citationId && (
-                                    <span className="ml-2 align-middle">
-                                      <button
-                                        onClick={() =>
-                                          setOpenCitation(field.citationId!)
-                                        }
-                                        className="citation"
-                                        title={
-                                          citations[field.citationId].title
-                                        }
-                                      >
-                                        {citations[field.citationId].code}
-                                      </button>
-                                    </span>
-                                  )}
-                                </dd>
-                              </div>
-                            ))}
-                          </dl>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
                   </div>
-                );
-              })}
-            </div>
-
-            {chosen && (
-              <motion.div
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-6 rounded-xl border border-success/40 bg-success/5 p-4 text-sm"
-              >
-                <div className="font-medium text-success">
-                  Resolution selected
+                ))
+              ) : (
+                <div className="rounded-xl border border-border bg-surface p-6 text-center text-sm text-text-secondary">
+                  No required forms were generated by the agents for this specific path.
                 </div>
-                <p className="mt-1 text-foreground/90">
-                  The Orchestrator has updated the dependency graph and
-                  re-sequenced the checklist accordingly.
-                </p>
-              </motion.div>
-            )}
-          </aside>
+              )}
+           </div>
         </div>
       </div>
-
-      <CitationPanel openId={openCitation} onClose={() => setOpenCitation(null)} />
       <SiteFooter />
     </div>
   );

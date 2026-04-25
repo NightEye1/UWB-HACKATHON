@@ -1,11 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowRight, ArrowLeft, Check } from "lucide-react";
+import { ArrowRight, ArrowLeft, Check, Loader2 } from "lucide-react";
 import { SiteHeader, SiteFooter } from "@/components/site-chrome";
 import { agents } from "@/data/scenario";
 import { agentIcons } from "@/components/agent-icons";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/start")({
   head: () => ({
@@ -110,13 +109,13 @@ function StartFlow() {
   const [step, setStep] = useState(0);
   const [known, setKnown] = useState(initialKnown);
   const [draft, setDraft] = useState("");
+  const [isEvaluating, setIsEvaluating] = useState(false);
 
   const total = questions.length;
   const done = step >= total;
   const current = !done ? questions[step] : null;
 
   const navigate = useNavigate({ from: '/start' });
-  const [isEvaluating, setIsEvaluating] = useState(false);
 
   const submitToAgents = async (finalData: typeof initialKnown) => {
     setIsEvaluating(true);
@@ -127,11 +126,11 @@ function StartFlow() {
       application_id: `app-${Math.floor(Math.random() * 10000)}`,
       project_type: "food_truck",
       business_info: { 
-        business_name: finalData.business, 
+        business_name: finalData.business || "Demo Business", 
         employees: finalData.employees.includes("me") ? 1 : 4 
       },
       location_details: { 
-        operating_zone: finalData.zone, 
+        operating_zone: finalData.zone || "Downtown", 
         proximity_to_park_feet: 45 // Hardcoded trap for the demo!
       },
       health_and_safety: { 
@@ -206,7 +205,8 @@ function StartFlow() {
           <ul className="mt-4 space-y-1">
             {agents.map((a) => {
               const Icon = agentIcons[a.iconKey];
-              const woke = wokenAgents.has(a.id);
+              // Keep all agents "awake" if we are evaluating
+              const woke = isEvaluating || wokenAgents.has(a.id);
               return (
                 <li
                   key={a.id}
@@ -239,20 +239,22 @@ function StartFlow() {
 
         {/* Center — questions */}
         <main className="min-h-[420px]">
-          <div className="mb-6 flex items-center justify-between">
-            <span className="font-mono text-xs text-text-secondary">
-              {Math.min(step + 1, total)} / {total}
-            </span>
-            <button
-              onClick={useDemo}
-              className="text-xs text-primary underline-offset-4 hover:underline"
-            >
-              Skip — use Maria's Tacos demo
-            </button>
-          </div>
+          {!isEvaluating && (
+            <div className="mb-6 flex items-center justify-between">
+              <span className="font-mono text-xs text-text-secondary">
+                {Math.min(step + 1, total)} / {total}
+              </span>
+              <button
+                onClick={useDemo}
+                className="text-xs text-primary underline-offset-4 hover:underline"
+              >
+                Skip — use Maria's Tacos demo
+              </button>
+            </div>
+          )}
 
           <AnimatePresence mode="wait">
-            {current ? (
+            {current && !isEvaluating ? (
               <motion.div
                 key={current.id}
                 initial={{ opacity: 0, y: 8 }}
@@ -315,6 +317,19 @@ function StartFlow() {
                   )}
                 </div>
               </motion.div>
+            ) : isEvaluating ? (
+              <motion.div
+                key="evaluating"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col items-center justify-center rounded-xl border border-border bg-surface p-12 text-center"
+              >
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <h1 className="mt-6 text-2xl font-medium">Agents are evaluating...</h1>
+                <p className="mt-2 max-w-md text-text-secondary">
+                  Reading the municipal code, checking zoning laws, and building your unified checklist.
+                </p>
+              </motion.div>
             ) : (
               <motion.div
                 key="done"
@@ -324,21 +339,12 @@ function StartFlow() {
                 className="rounded-xl border border-border bg-surface p-8"
               >
                 <div className="inline-flex items-center gap-2 rounded-full bg-success/10 px-3 py-1 text-xs font-medium text-success">
-                  <Check className="h-3.5 w-3.5" /> Intake complete
+                  <Check className="h-3.5 w-3.5" /> Error navigating
                 </div>
-                <h1 className="mt-4 text-3xl">All six agents are ready.</h1>
+                <h1 className="mt-4 text-3xl">Something went wrong.</h1>
                 <p className="mt-3 max-w-xl text-text-secondary">
-                  They've cross-referenced your answers against the Riverbend
-                  Municipal Code. Four agents are clear or close to clear; one
-                  conflict needs your input. Let's review.
+                  Please refresh the page and try again.
                 </p>
-                <Link
-                  to="/review"
-                  className="mt-8 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-medium text-primary-foreground hover:opacity-95"
-                >
-                  Open the Agent Council
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
               </motion.div>
             )}
           </AnimatePresence>
