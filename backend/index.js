@@ -2,6 +2,12 @@ require('dotenv').config({ path: '../.env.local' });
 const express = require('express');
 const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { createClient } = require('@supabase/supabase-js');
+
+// --- Initialize Supabase Client ---
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -70,7 +76,31 @@ app.post('/api/evaluate-permit', async (req, res) => {
             }
         });
 
-        // 4. Send the FINAL response (Make sure there are no other res.json calls after this!)
+        // ==========================================
+        // 💾 NEW: Save to Supabase Database
+        // ==========================================
+        console.log(`[💾] Saving application ${intakeData.application_id} to database...`);
+        const { error: dbError } = await supabase
+            .from('applications')
+            .insert([
+                {
+                    application_id: intakeData.application_id,
+                    project_type: intakeData.project_type,
+                    status: hasConflict ? 'Action Required' : 'Approved',
+                    conflict_detected: hasConflict,
+                    checklist_data: { agent_details: allResults, unified_checklist: finalChecklist }
+                }
+            ]);
+
+        if (dbError) {
+            console.error("[❌] Database Save Failed:", dbError.message);
+            // We log the error, but we don't crash the server so the frontend still gets the checklist
+        } else {
+            console.log(`[✅] Application securely saved to Supabase!`);
+        }
+        // ==========================================
+
+        // 4. Send the FINAL response
         return res.status(200).json({
             status: "success",
             conflict_detected: hasConflict,
@@ -90,6 +120,35 @@ app.post('/api/evaluate-permit', async (req, res) => {
         }
     }
 });
+
+// --- Function to save application results ---
+async function saveApplicationToDatabase(applicationData) {
+  try {
+    const { data, error } = await supabase
+      .from('applications')
+      .insert([
+        {
+          application_id: applicationData.application_id,
+          project_type: applicationData.project_type,
+          status: applicationData.status || 'Under Review',
+          conflict_detected: applicationData.conflict_detected || false,
+          checklist_data: applicationData.checklist_data,
+        },
+      ])
+      .select();
+
+    if (error) {
+      console.error('Database insertion error:', error);
+      throw error;
+    }
+
+    console.log('Application saved successfully:', data);
+    return data[0];
+  } catch (err) {
+    console.error('Failed to save application:', err.message);
+    throw err;
+  }
+}
 
 // --- Start Server ---
 app.listen(PORT, () => {
