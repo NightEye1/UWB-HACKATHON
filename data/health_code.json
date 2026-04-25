@@ -1,0 +1,10 @@
+{
+  "agency": "Health Department",
+  "rules": [
+    {
+      "id": "HC-101",
+      "description": "Any mobile food unit with open food preparation must have a pressurized gray water tank of at least 15 gallons.",
+      "citation": "Title 8, Section 4A"
+    }
+  ]
+}
