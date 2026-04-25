@@ -22,7 +22,7 @@ app.get('/', (req, res) => {
     res.status(200).send('PermitPilot Orchestrator is online.');
 });
 
-/*/ --- Agent Engine ---
+// --- Agent Engine ---
 async function callDomainAgent(agentName, systemRules, userData) {
     console.log(`[🤖] Waking up ${agentName} Agent...`);
     try {
@@ -57,7 +57,7 @@ async function callDomainAgent(agentName, systemRules, userData) {
 }
 //*/
 
-// --- TEMPORARY MOCKED AGENT ENGINE ---
+/*/ --- TEMPORARY MOCKED AGENT ENGINE ---
 async function callDomainAgent(agentName, systemRules, userData) {
     console.log(`[🤖] Waking up ${agentName} Agent (MOCKED)...`);
     
@@ -91,6 +91,7 @@ async function callDomainAgent(agentName, systemRules, userData) {
 
     return { agency: agentName, status: "error", notes: "Unknown agent." };
 }
+//*/
 
 // --- The Core Orchestrator Endpoint ---
 app.post('/api/evaluate-permit', async (req, res) => {
