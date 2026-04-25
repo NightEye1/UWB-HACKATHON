@@ -42,16 +42,26 @@ function Review() {
 
   // --- API STATE ---
   const [apiResult, setApiResult] = useState<any>(null);
+  const [intakeData, setIntakeData] = useState<any>(null); // NEW
 
   useEffect(() => {
-    // Grab Gemini's hard work from the previous page
+    // Grab Gemini's hard work
     const savedData = localStorage.getItem("permitResult");
     if (savedData) {
       try {
         setApiResult(JSON.parse(savedData));
-        console.log("Loaded Gemini API Data:", JSON.parse(savedData));
       } catch (e) {
         console.error("Failed to parse permit results", e);
+      }
+    }
+
+    // NEW: Grab the user's typed answers
+    const savedIntake = localStorage.getItem("permitIntake");
+    if (savedIntake) {
+      try {
+        setIntakeData(JSON.parse(savedIntake));
+      } catch (e) {
+        console.error("Failed to parse intake data", e);
       }
     }
 

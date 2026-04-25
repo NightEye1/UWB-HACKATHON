@@ -151,6 +151,9 @@ function StartFlow() {
       // Store the AI results so the Review page can grab them
       localStorage.setItem("permitResult", JSON.stringify(data));
       
+      // NEW: Store what the user actually typed in!
+      localStorage.setItem("permitIntake", JSON.stringify(finalData));
+      
       // Auto-navigate to the review page once the agents are done
       navigate({ to: "/review" });
     } catch (error) {
