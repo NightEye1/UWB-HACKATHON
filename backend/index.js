@@ -18,7 +18,7 @@ async function callDomainAgent(agentName, systemRules, userData) {
     try {
         // We use Gemini 1.5 Flash because it is insanely fast for hackathons
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash-latest",
+            model: "gemini-2.5-flash",
             systemInstruction: `You are the ${agentName}. Evaluate the user's application against these municipal codes: ${systemRules}. You MUST return ONLY a valid JSON object. Required schema: { "agency": "${agentName}", "status": "approved" | "conflict", "notes": "Brief explanation", "citations": ["SMC ..."], "required_forms": [{"form_name": "...", "url": "..."}] }`,
             generationConfig: {
                 temperature: 0.1,
